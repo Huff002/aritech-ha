@@ -30,19 +30,6 @@ def _get_zone_device_info(
     )
 
 
-def _get_output_device_info(
-    coordinator: AritechCoordinator, output_number: int, output_name: str
-) -> DeviceInfo:
-    """Get device info for an output (each output is its own device)."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_output_{output_number}")},
-        name=output_name,
-        manufacturer=MANUFACTURER,
-        model="Output",
-        via_device=(DOMAIN, coordinator.config_entry.entry_id),
-    )
-
-
 def _get_panel_device_info(coordinator: AritechCoordinator) -> DeviceInfo:
     """Get device info for the main panel."""
     return DeviceInfo(
@@ -102,16 +89,6 @@ async def async_setup_entry(
                 coordinator=coordinator,
                 zone_number=zone["number"],
                 zone_name=zone["name"],
-            )
-        )
-
-    # Create output switches (part of panel device)
-    for output in coordinator.get_outputs():
-        entities.append(
-            AritechOutputSwitch(
-                coordinator=coordinator,
-                output_number=output["number"],
-                output_name=output["name"],
             )
         )
 
@@ -252,101 +229,6 @@ class AritechZoneInhibitSwitch(SwitchEntity):
             await self.coordinator.async_uninhibit_zone(self._zone_number)
         except Exception as err:
             _LOGGER.error("Failed to uninhibit zone %d: %s", self._zone_number, err)
-            raise
-
-
-class AritechOutputSwitch(SwitchEntity):
-    """Switch to control an output."""
-
-    _attr_has_entity_name = True
-    _attr_device_class = SwitchDeviceClass.OUTLET
-    _attr_icon = "mdi:electric-switch"
-
-    def __init__(
-        self,
-        coordinator: AritechCoordinator,
-        output_number: int,
-        output_name: str,
-    ) -> None:
-        """Initialize the output switch."""
-        self.coordinator = coordinator
-        self._output_number = output_number
-        self._output_name = output_name
-        self._unregister_callback: callable | None = None
-
-        # Entity attributes
-        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_output_{output_number}"
-        self._attr_name = "Switch"
-
-        # Output switch belongs to its own output device
-        self._attr_device_info = _get_output_device_info(coordinator, output_number, output_name)
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity is added to hass."""
-        await super().async_added_to_hass()
-
-        self._unregister_callback = self.coordinator.register_output_callback(
-            self._output_number, self._handle_output_update
-        )
-
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self.async_write_ha_state)
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Run when entity is being removed."""
-        if self._unregister_callback:
-            self._unregister_callback()
-            self._unregister_callback = None
-        await super().async_will_remove_from_hass()
-
-    @callback
-    def _handle_output_update(self) -> None:
-        """Handle output state update."""
-        self.async_write_ha_state()
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.connected
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if output is active."""
-        output_state = self.coordinator.get_output_state_obj(self._output_number)
-        if not output_state:
-            return None
-        return output_state.is_on or output_state.is_active
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        output_state = self.coordinator.get_output_state_obj(self._output_number)
-        if not output_state:
-            return {"output_number": self._output_number}
-
-        return {
-            "output_number": self._output_number,
-            "state_text": str(output_state),
-            "is_forced": output_state.is_forced,
-        }
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Activate the output."""
-        _LOGGER.info("Activating output %d (%s)", self._output_number, self._output_name)
-        try:
-            await self.coordinator.async_activate_output(self._output_number)
-        except Exception as err:
-            _LOGGER.error("Failed to activate output %d: %s", self._output_number, err)
-            raise
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Deactivate the output."""
-        _LOGGER.info("Deactivating output %d (%s)", self._output_number, self._output_name)
-        try:
-            await self.coordinator.async_deactivate_output(self._output_number)
-        except Exception as err:
-            _LOGGER.error("Failed to deactivate output %d: %s", self._output_number, err)
             raise
 
 

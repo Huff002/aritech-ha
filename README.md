@@ -20,48 +20,65 @@ The Classic 1000 series panels use a legacy protocol that is fundamentally diffe
 - Force arm option for each area
 
 ### Binary Sensors
-**Zone sensors:**
-- Active state (motion/door/window detection with auto-detected device class)
-- Tamper detection
-- Fault detection
-- Alarm state
-- Isolated state
 
-**Area sensors:**
-- Alarm status
-- Tamper status
-- Fire alarm
-- Panic alarm
+**Zone sensors** (per zone device):
+- Active - motion/door/window detection with auto-detected device class
+- Tamper - zone tamper detection
+- Fault - zone fault/trouble detection
+- Alarming - zone is currently in alarm
+- Isolated - zone is isolated/bypassed
+
+**Area sensors** (per area device):
+- Alarm - area is in alarm state
+- Tamper - area tamper detected
+- Fire - fire alarm active
+- Panic - panic alarm active
+
+**Door sensors** (per door device):
+- Lock - door lock state (ON = locked)
+- Open - door open/closed state
+- Forced - door was forced open
+- Open Too Long - door has been open too long
+- Tamper - door reader tamper detection
+
+**Output sensors** (per output device, read-only):
+- Active - output is currently active (attributes include is_on, is_active, is_forced)
+- Forced - output is being force controlled
+
+**Filter sensors** (per filter device, read-only):
+- Active - filter condition is active
 
 ### Sensors
 - Panel model and firmware version
 - Connection status
-- Area state (textual)
-- Zone state (textual)
+- Area state text
+- Zone state text
+- Trigger state text
 
 ### Switches
-- Zone inhibit control
-- Output control
-- Trigger activation
-- Force arm toggle per area
-- Door lock/unlock (ON = unlocked)
-- Door enable/disable (ON = enabled)
+
+**Zone controls** (per zone device):
+- Inhibit - inhibit/uninhibit zone (ON = inhibited)
+
+**Area controls** (per area device):
+- Force Arm - enable force arming for this area
+
+**Trigger controls** (per panel device):
+- One switch per trigger for manual activation
+
+**Door controls** (per door device):
+- Unlocked - lock/unlock door (ON = unlocked)
+- Enabled - enable/disable door (ON = enabled)
 
 ### Buttons
-- Door unlock (standard time) - momentary unlock for configured duration
 
-### Doors
-- Lock state binary sensor
-- Open/closed binary sensor
-- Forced open detection
-- Open too long detection
-- Reader tamper detection
+**Door controls** (per door device):
+- Unlock (Standard Time) - momentary unlock for panel-configured duration
 
 ## Requirements
 
 - Home Assistant 2024.1 or newer
 - Aritech panel with network connectivity (IP module)
-- `aritech-client` Python library (v0.4.0+)
 - Panel encryption key and PIN code (x500) or username/password (x700)
 
 ## Installation
@@ -96,9 +113,9 @@ After setup, the integration creates:
 | Entity Type | Description |
 |-------------|-------------|
 | `alarm_control_panel` | One per area - arm/disarm control |
-| `binary_sensor` | Zone states (active, tamper, fault, alarm, isolated), area alerts, door states |
-| `sensor` | Panel info, connection status, area/zone state text |
-| `switch` | Zone inhibit, outputs, triggers, force arm, door lock/unlock, door enable |
+| `binary_sensor` | Zone states, area alerts, door states, output states (read-only), filter states |
+| `sensor` | Panel info, connection status, state text sensors |
+| `switch` | Zone inhibit, triggers, force arm, door lock/unlock, door enable |
 | `button` | Door unlock (standard time) |
 
 ## Arming Modes
@@ -145,9 +162,9 @@ This integration is provided "as is" without warranty of any kind. Use at your o
 
 ## Trademarks
 
-- **Aritech** is a trademark of KGS Global Corporation.
-- **ATS** is a trademark of KGS Global Corporation.
-- **KGS** is a trademark of KGS Global Corporation.
+- **Aritech** is a trademark of Kidde Global Services.
+- **ATS** is a trademark of Kidde Global Services.
+- **KGS** is a trademark of Kidde Global Services.
 - **Home Assistant** is a trademark of the Home Assistant project.
 
 All other trademarks are the property of their respective owners. The use of these trademarks in this project does not imply any affiliation with or endorsement by the trademark holders.

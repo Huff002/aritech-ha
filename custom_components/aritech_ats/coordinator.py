@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from aritech_client import AritechClient, AritechMonitor, ChangeEvent, InitializedEvent
-from aritech_client import AreaState, ZoneState, OutputState, TriggerState, DoorState
+from aritech_client import AreaState, ZoneState, OutputState, TriggerState, DoorState, FilterState
 
 from .const import (
     DOMAIN,
@@ -42,6 +42,7 @@ class AritechData:
     outputs: list[dict[str, Any]] = field(default_factory=list)
     triggers: list[dict[str, Any]] = field(default_factory=list)
     doors: list[dict[str, Any]] = field(default_factory=list)
+    filters: list[dict[str, Any]] = field(default_factory=list)
 
     # Current states keyed by entity number
     area_states: dict[int, dict[str, Any]] = field(default_factory=dict)
@@ -49,6 +50,7 @@ class AritechData:
     output_states: dict[int, dict[str, Any]] = field(default_factory=dict)
     trigger_states: dict[int, dict[str, Any]] = field(default_factory=dict)
     door_states: dict[int, dict[str, Any]] = field(default_factory=dict)
+    filter_states: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
 class AritechCoordinator(DataUpdateCoordinator[AritechData]):
@@ -82,6 +84,7 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
         self._output_callbacks: dict[int, list[callable]] = {}
         self._trigger_callbacks: dict[int, list[callable]] = {}
         self._door_callbacks: dict[int, list[callable]] = {}
+        self._filter_callbacks: dict[int, list[callable]] = {}
 
         # Force arm state per area
         self._force_arm: dict[int, bool] = {}
@@ -191,12 +194,13 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
         def handle_initialized(event: InitializedEvent) -> None:
             """Handle initialization event with all entity data."""
             _LOGGER.debug(
-                "Initialized: %d zones, %d areas, %d outputs, %d triggers, %d doors",
+                "Initialized: %d zones, %d areas, %d outputs, %d triggers, %d doors, %d filters",
                 len(event.zones),
                 len(event.areas),
                 len(event.outputs),
                 len(event.triggers),
                 len(event.doors),
+                len(event.filters),
             )
 
             # Convert NamedItem lists to dicts for backward compatibility
@@ -205,6 +209,7 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
             self._data.outputs = [{"number": o.number, "name": o.name} for o in event.outputs]
             self._data.triggers = [{"number": t.number, "name": t.name} for t in event.triggers]
             self._data.doors = [{"number": d.number, "name": d.name} for d in event.doors]
+            self._data.filters = [{"number": f.number, "name": f.name} for f in event.filters]
 
             # Store initial states (these contain state dataclass objects)
             self._data.zone_states = event.zone_states
@@ -212,6 +217,7 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
             self._data.output_states = event.output_states
             self._data.trigger_states = event.trigger_states
             self._data.door_states = event.door_states
+            self._data.filter_states = event.filter_states
 
             # Update coordinator data
             self.async_set_updated_data(self._data)
@@ -316,6 +322,26 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
             # Update coordinator
             self.async_set_updated_data(self._data)
 
+        @self._monitor.on_filter_changed
+        def handle_filter_changed(event: ChangeEvent) -> None:
+            """Handle filter state change."""
+            _LOGGER.debug(
+                "Filter %d (%s) changed: %s -> %s",
+                event.id,
+                event.name,
+                event.old_data.get("state") if event.old_data else "NEW",
+                event.new_data.get("state"),
+            )
+
+            # Update stored state
+            self._data.filter_states[event.id] = event.new_data
+
+            # Notify specific filter callbacks
+            self._notify_callbacks(self._filter_callbacks, event.id)
+
+            # Update coordinator
+            self.async_set_updated_data(self._data)
+
         @self._monitor.on_error
         def handle_error(error: Exception) -> None:
             """Handle monitor errors."""
@@ -393,6 +419,17 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
 
         def unregister() -> None:
             self._door_callbacks[door_num].remove(callback_fn)
+
+        return unregister
+
+    def register_filter_callback(self, filter_num: int, callback_fn: callable) -> callable:
+        """Register a callback for filter state changes."""
+        if filter_num not in self._filter_callbacks:
+            self._filter_callbacks[filter_num] = []
+        self._filter_callbacks[filter_num].append(callback_fn)
+
+        def unregister() -> None:
+            self._filter_callbacks[filter_num].remove(callback_fn)
 
         return unregister
 
@@ -689,3 +726,18 @@ class AritechCoordinator(DataUpdateCoordinator[AritechData]):
     def get_doors(self) -> list[dict[str, Any]]:
         """Get list of all doors."""
         return self._data.doors
+
+    def get_filter_state(self, filter_num: int) -> dict[str, Any] | None:
+        """Get current state dict of a filter (contains 'state' key with FilterState dataclass)."""
+        return self._data.filter_states.get(filter_num)
+
+    def get_filter_state_obj(self, filter_num: int) -> FilterState | None:
+        """Get the FilterState dataclass for a filter."""
+        state_data = self._data.filter_states.get(filter_num)
+        if state_data:
+            return state_data.get("state")
+        return None
+
+    def get_filters(self) -> list[dict[str, Any]]:
+        """Get list of all filters."""
+        return self._data.filters

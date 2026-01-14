@@ -213,6 +213,39 @@ async def async_setup_entry(
             )
         )
 
+    # Create output binary sensors (read-only state)
+    for output in coordinator.get_outputs():
+        output_num = output["number"]
+        output_name = output["name"]
+
+        entities.append(
+            AritechOutputActiveBinarySensor(
+                coordinator=coordinator,
+                output_number=output_num,
+                output_name=output_name,
+            )
+        )
+        entities.append(
+            AritechOutputForcedBinarySensor(
+                coordinator=coordinator,
+                output_number=output_num,
+                output_name=output_name,
+            )
+        )
+
+    # Create filter binary sensors
+    for filter_item in coordinator.get_filters():
+        filter_num = filter_item["number"]
+        filter_name = filter_item["name"]
+
+        entities.append(
+            AritechFilterActiveBinarySensor(
+                coordinator=coordinator,
+                filter_number=filter_num,
+                filter_name=filter_name,
+            )
+        )
+
     if entities:
         _LOGGER.info("Setting up %d binary sensors", len(entities))
         async_add_entities(entities)
@@ -800,6 +833,32 @@ def _get_door_device_info(
     )
 
 
+def _get_output_device_info(
+    coordinator: AritechCoordinator, output_number: int, output_name: str
+) -> DeviceInfo:
+    """Get device info for an output (each output is its own device)."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_output_{output_number}")},
+        name=output_name,
+        manufacturer=MANUFACTURER,
+        model="Output",
+        via_device=(DOMAIN, coordinator.config_entry.entry_id),
+    )
+
+
+def _get_filter_device_info(
+    coordinator: AritechCoordinator, filter_number: int, filter_name: str
+) -> DeviceInfo:
+    """Get device info for a filter (each filter is its own device)."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_filter_{filter_number}")},
+        name=filter_name,
+        manufacturer=MANUFACTURER,
+        model="Filter",
+        via_device=(DOMAIN, coordinator.config_entry.entry_id),
+    )
+
+
 class AritechDoorLockBinarySensor(BinarySensorEntity):
     """Door lock state sensor - shows if door is locked."""
 
@@ -1103,3 +1162,222 @@ class AritechDoorTamperBinarySensor(BinarySensorEntity):
         if not door_state:
             return None
         return door_state.is_reader_tamper
+
+
+# =============================================================================
+# Filter Binary Sensors
+# =============================================================================
+
+
+class AritechFilterActiveBinarySensor(BinarySensorEntity):
+    """Filter active state sensor.
+
+    Filters are read-only entities that represent logical conditions in the panel.
+    They have a simple active/inactive state.
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:filter"
+
+    def __init__(
+        self,
+        coordinator: AritechCoordinator,
+        filter_number: int,
+        filter_name: str,
+    ) -> None:
+        """Initialize the filter active binary sensor."""
+        self.coordinator = coordinator
+        self._filter_number = filter_number
+        self._filter_name = filter_name
+        self._unregister_callback: callable | None = None
+
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_filter_{filter_number}_active"
+        self._attr_name = "Active"
+        self._attr_device_info = _get_filter_device_info(coordinator, filter_number, filter_name)
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to hass."""
+        await super().async_added_to_hass()
+        self._unregister_callback = self.coordinator.register_filter_callback(
+            self._filter_number, self._handle_filter_update
+        )
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity is being removed."""
+        if self._unregister_callback:
+            self._unregister_callback()
+            self._unregister_callback = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_filter_update(self) -> None:
+        """Handle filter state update."""
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.connected
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the filter is active."""
+        filter_state = self.coordinator.get_filter_state_obj(self._filter_number)
+        if not filter_state:
+            return None
+        return filter_state.is_active
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        return {
+            "filter_number": self._filter_number,
+        }
+
+
+# =============================================================================
+# Output Binary Sensors (read-only)
+# =============================================================================
+
+
+class AritechOutputActiveBinarySensor(BinarySensorEntity):
+    """Output active state sensor (read-only).
+
+    Shows the current state of an output. Outputs can be active due to
+    panel logic, schedules, or being forced on/off.
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.POWER
+    _attr_icon = "mdi:electric-switch"
+
+    def __init__(
+        self,
+        coordinator: AritechCoordinator,
+        output_number: int,
+        output_name: str,
+    ) -> None:
+        """Initialize the output active binary sensor."""
+        self.coordinator = coordinator
+        self._output_number = output_number
+        self._output_name = output_name
+        self._unregister_callback: callable | None = None
+
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_output_{output_number}_active"
+        self._attr_name = "Active"
+        self._attr_device_info = _get_output_device_info(coordinator, output_number, output_name)
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to hass."""
+        await super().async_added_to_hass()
+        self._unregister_callback = self.coordinator.register_output_callback(
+            self._output_number, self._handle_output_update
+        )
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity is being removed."""
+        if self._unregister_callback:
+            self._unregister_callback()
+            self._unregister_callback = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_output_update(self) -> None:
+        """Handle output state update."""
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.connected
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the output is active."""
+        output_state = self.coordinator.get_output_state_obj(self._output_number)
+        if not output_state:
+            return None
+        # Output is on if either is_on or is_active is true
+        return output_state.is_on or output_state.is_active
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        output_state = self.coordinator.get_output_state_obj(self._output_number)
+        if not output_state:
+            return {"output_number": self._output_number}
+
+        return {
+            "output_number": self._output_number,
+            "is_on": output_state.is_on,
+            "is_active": output_state.is_active,
+            "is_forced": output_state.is_forced,
+            "state_text": str(output_state),
+        }
+
+
+class AritechOutputForcedBinarySensor(BinarySensorEntity):
+    """Output forced state sensor (read-only).
+
+    Shows if an output is being force controlled (overridden).
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:lock"
+
+    def __init__(
+        self,
+        coordinator: AritechCoordinator,
+        output_number: int,
+        output_name: str,
+    ) -> None:
+        """Initialize the output forced binary sensor."""
+        self.coordinator = coordinator
+        self._output_number = output_number
+        self._output_name = output_name
+        self._unregister_callback: callable | None = None
+
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_output_{output_number}_forced"
+        self._attr_name = "Forced"
+        self._attr_device_info = _get_output_device_info(coordinator, output_number, output_name)
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity is added to hass."""
+        await super().async_added_to_hass()
+        self._unregister_callback = self.coordinator.register_output_callback(
+            self._output_number, self._handle_output_update
+        )
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity is being removed."""
+        if self._unregister_callback:
+            self._unregister_callback()
+            self._unregister_callback = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_output_update(self) -> None:
+        """Handle output state update."""
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.connected
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the output is forced."""
+        output_state = self.coordinator.get_output_state_obj(self._output_number)
+        if not output_state:
+            return None
+        return output_state.is_forced
