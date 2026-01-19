@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/sebakerckhof/aritech-ha/issues",
   "loggers": ["aritech_client"],
   "requirements": ["aritech-client>=0.5.0"],
-  "version": "0.5.0"
+  "version": "0.6.1"
 }
