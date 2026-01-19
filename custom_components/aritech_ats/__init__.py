@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import DOMAIN, CONF_PANEL_TYPE, PANEL_TYPE_X500
 from .coordinator import AritechCoordinator
@@ -82,3 +83,44 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    device_entry: DeviceEntry,
+) -> bool:
+    """Allow removal of devices no longer present on the panel.
+
+    This enables the "Delete" button in the UI for stale devices
+    (e.g., zones/areas/outputs that were removed from the panel config).
+    Devices that still exist on the panel cannot be deleted.
+    """
+    coordinator: AritechCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    entry_id = config_entry.entry_id
+
+    # Build set of currently valid device identifiers from panel data
+    valid_identifiers: set[tuple[str, str]] = {
+        (DOMAIN, entry_id),  # Panel device itself - never allow removal
+    }
+
+    for zone in coordinator.get_zones():
+        valid_identifiers.add((DOMAIN, f"{entry_id}_zone_{zone['number']}"))
+
+    for area in coordinator.get_areas():
+        valid_identifiers.add((DOMAIN, f"{entry_id}_area_{area['number']}"))
+
+    for door in coordinator.get_doors():
+        valid_identifiers.add((DOMAIN, f"{entry_id}_door_{door['number']}"))
+
+    for trigger in coordinator.get_triggers():
+        valid_identifiers.add((DOMAIN, f"{entry_id}_trigger_{trigger['number']}"))
+
+    for output in coordinator.get_outputs():
+        valid_identifiers.add((DOMAIN, f"{entry_id}_output_{output['number']}"))
+
+    for filter_ in coordinator.get_filters():
+        valid_identifiers.add((DOMAIN, f"{entry_id}_filter_{filter_['number']}"))
+
+    # Allow removal only if device is NOT in current panel data
+    return not bool(device_entry.identifiers & valid_identifiers)
