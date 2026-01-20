@@ -27,7 +27,6 @@ from .const import (
     PANEL_TYPE_X500,
     PANEL_TYPE_X700,
     DEFAULT_PORT,
-    DEFAULT_PIN_CODE,
     DEFAULT_ENCRYPTION_KEY,
 )
 
@@ -47,7 +46,7 @@ CONNECTION_SCHEMA = vol.Schema(
 # Step 2a: x500 PIN authentication schema
 X500_AUTH_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_PIN_CODE, default=DEFAULT_PIN_CODE): TextSelector(
+        vol.Required(CONF_PIN_CODE): TextSelector(
             TextSelectorConfig(type=TextSelectorType.PASSWORD)
         ),
     }
