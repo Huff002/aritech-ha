@@ -8,9 +8,9 @@ A custom Home Assistant integration for Aritech alarm panels, providing real-tim
 |--------------|--------|-------|
 | ATS x500 | Supported | Tested with x500 firmware 4.1, 4.8 and 4.11 |
 | ATS x700 (everon) |Supported | Tested with x700 firmware 4.1 |
-| ATS x000 | Not Supported | Uses a different protocol |
+| ATS x000 | Beta | Only the ATSX000IP panels, not the older ones, requires a separate login |
 
-The Classic 1000 series panels use a legacy protocol that is fundamentally different from the x500/x700 series, and there are no plans to support them. But we're open to PR's if you want to add support.
+The X000 panels only allow 1 active connection per user. Therefore you'll have to create a separate user for the integration if you still want to be able to use the advisor advanced app.
 
 ## Features
 
@@ -34,18 +34,18 @@ The Classic 1000 series panels use a legacy protocol that is fundamentally diffe
 - Fire - fire alarm active
 - Panic - panic alarm active
 
-**Door sensors** (per door device):
+**Door sensors** (per door device, not on X000 panels):
 - Lock - door lock state (ON = locked)
 - Open - door open/closed state
 - Forced - door was forced open
 - Open Too Long - door has been open too long
 - Tamper - door reader tamper detection
 
-**Output sensors** (per output device, read-only):
+**Output sensors** (per output device, read-only, not on X000 panels):
 - Active - output is currently active (attributes include is_on, is_active, is_forced)
 - Forced - output is being force controlled
 
-**Filter sensors** (per filter device, read-only):
+**Filter sensors** (per filter device, read-only, not on X000 panels):
 - Active - filter condition is active
 
 ### Sensors
@@ -66,20 +66,20 @@ The Classic 1000 series panels use a legacy protocol that is fundamentally diffe
 **Trigger controls** (per panel device):
 - One switch per trigger for manual activation
 
-**Door controls** (per door device):
+**Door controls** (per door device, not on X000 panels):
 - Unlocked - lock/unlock door (ON = unlocked)
 - Enabled - enable/disable door (ON = enabled)
 
 ### Buttons
 
-**Door controls** (per door device):
+**Door controls** (per door device, not on X000 panels):
 - Unlock (Standard Time) - momentary unlock for panel-configured duration
 
 ## Requirements
 
 - Home Assistant 2024.1 or newer
 - Aritech panel with network connectivity (IP module)
-- Panel encryption key and PIN code (x500) or username/password (x700)
+- Panel encryption key and PIN code (x000 / x500) or username/password (x700)
 
 ## Installation
 
