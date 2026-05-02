@@ -38,8 +38,12 @@ ZONE_NAME_DEVICE_CLASS_PATTERNS: list[tuple[str, BinarySensorDeviceClass]] = [
 ]
 
 
-def guess_device_class(zone_name: str) -> BinarySensorDeviceClass | None:
-    """Guess the device class based on zone name."""
+def guess_device_class(zone_name: str, zone_number: int | None = None) -> BinarySensorDeviceClass | None:
+    """Guess the device class based on zone name or zone number (incl. PIRCams)."""
+    # Forceer PIRCam zones (zoals 1051-1056, 1501, etc.) naar bewegingsdetectie
+    if zone_number and zone_number >= 1051:
+        return BinarySensorDeviceClass.MOTION
+        
     for pattern, device_class in ZONE_NAME_DEVICE_CLASS_PATTERNS:
         if re.search(pattern, zone_name):
             return device_class
@@ -279,8 +283,8 @@ class AritechZoneActiveBinarySensor(BinarySensorEntity):
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_zone_{zone_number}_active"
         self._attr_name = "Active"
 
-        # Guess device class from zone name
-        self._attr_device_class = guess_device_class(zone_name)
+        # Guess device class from zone name or number (PIRCam)
+        self._attr_device_class = guess_device_class(zone_name, zone_number=zone_number)
 
         # Each zone is its own device
         self._attr_device_info = _get_zone_device_info(coordinator, zone_number, zone_name)
@@ -380,7 +384,7 @@ class AritechZoneTamperBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_zone_update(self) -> None:
-        """Handle zone state update."""
+        """Handle zone update."""
         self.async_write_ha_state()
 
     @property
@@ -437,7 +441,7 @@ class AritechZoneFaultBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_zone_update(self) -> None:
-        """Handle zone state update."""
+        """Handle zone update."""
         self.async_write_ha_state()
 
     @property
@@ -494,7 +498,7 @@ class AritechZoneAlarmingBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_zone_update(self) -> None:
-        """Handle zone state update."""
+        """Handle zone update."""
         self.async_write_ha_state()
 
     @property
@@ -551,7 +555,7 @@ class AritechZoneIsolatedBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_zone_update(self) -> None:
-        """Handle zone state update."""
+        """Handle zone update."""
         self.async_write_ha_state()
 
     @property
@@ -626,7 +630,7 @@ class AritechAreaAlarmBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_area_update(self) -> None:
-        """Handle area state update."""
+        """Handle area update."""
         self.async_write_ha_state()
 
     @property
@@ -683,7 +687,7 @@ class AritechAreaTamperBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_area_update(self) -> None:
-        """Handle area state update."""
+        """Handle area update."""
         self.async_write_ha_state()
 
     @property
@@ -740,7 +744,7 @@ class AritechAreaFireBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_area_update(self) -> None:
-        """Handle area state update."""
+        """Handle area update."""
         self.async_write_ha_state()
 
     @property
@@ -798,7 +802,7 @@ class AritechAreaPanicBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_area_update(self) -> None:
-        """Handle area state update."""
+        """Handle area update."""
         self.async_write_ha_state()
 
     @property
@@ -900,7 +904,7 @@ class AritechDoorLockBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_door_update(self) -> None:
-        """Handle door state update."""
+        """Handle door update."""
         self.async_write_ha_state()
 
     @property
@@ -910,11 +914,10 @@ class AritechDoorLockBinarySensor(BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return true if the door is unlocked (lock binary sensor: on=unlocked)."""
+        """Return true if the door is unlocked."""
         door_state = self.coordinator.get_door_state_obj(self._door_number)
         if not door_state:
             return None
-        # Lock sensor is ON when unlocked
         return not door_state.is_locked
 
     @property
@@ -975,7 +978,7 @@ class AritechDoorOpenBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_door_update(self) -> None:
-        """Handle door state update."""
+        """Handle door update."""
         self.async_write_ha_state()
 
     @property
@@ -1032,7 +1035,7 @@ class AritechDoorForcedBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_door_update(self) -> None:
-        """Handle door state update."""
+        """Handle door update."""
         self.async_write_ha_state()
 
     @property
@@ -1090,7 +1093,7 @@ class AritechDoorOpenTooLongBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_door_update(self) -> None:
-        """Handle door state update."""
+        """Handle door update."""
         self.async_write_ha_state()
 
     @property
@@ -1147,7 +1150,7 @@ class AritechDoorTamperBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_door_update(self) -> None:
-        """Handle door state update."""
+        """Handle door update."""
         self.async_write_ha_state()
 
     @property
@@ -1289,7 +1292,7 @@ class AritechOutputActiveBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_output_update(self) -> None:
-        """Handle output state update."""
+        """Handle output update."""
         self.async_write_ha_state()
 
     @property
@@ -1303,7 +1306,6 @@ class AritechOutputActiveBinarySensor(BinarySensorEntity):
         output_state = self.coordinator.get_output_state_obj(self._output_number)
         if not output_state:
             return None
-        # Output is on if either is_on or is_active is true
         return output_state.is_on or output_state.is_active
 
     @property
@@ -1366,7 +1368,7 @@ class AritechOutputForcedBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_output_update(self) -> None:
-        """Handle output state update."""
+        """Handle output update."""
         self.async_write_ha_state()
 
     @property
